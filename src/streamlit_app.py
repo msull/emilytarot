@@ -130,12 +130,3 @@ elif this_state == States.gathering_description:
     gather_info_view()
 else:
     pass
-st.write("&nbsp;")
-st.write("&nbsp;")
-st.write("&nbsp;")
-st.write("&nbsp;")
-_, c = st.columns((5, 1))
-if c.button("Restart"):
-    st.session_state.clear()
-    # st.session_state.progress = States.initial
-    st.experimental_rerun()
