@@ -1,4 +1,6 @@
 streamlit
 openai
 requests
-
+humanize
+polars
+boto
