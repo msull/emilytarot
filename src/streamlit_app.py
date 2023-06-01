@@ -6,8 +6,15 @@ from pydantic import BaseSettings
 import random
 
 st.set_page_config(layout="wide", initial_sidebar_state="collapsed")
-if "reading_started" not in st.session_state:
-    st.session_state.reading_started = False
+
+
+class States:
+    initial = "initial"
+    gathering_description = "gathering_description"
+
+
+if "progress" not in st.session_state:
+    st.session_state.progress = States.initial
 
 
 class Settings(BaseSettings):
@@ -23,7 +30,7 @@ SETTINGS = get_settings()
 if not SETTINGS.app_debug:
     hide_menu_style = """
             <style>
-            html { font-size: 140%;} 
+            # html { font-size: 140%;} 
             footer {visibility: hidden;}
             #MainMenu {visibility: hidden;}
             </style>
@@ -50,28 +57,21 @@ IMAGE_SELECTOR = RandomSelector([str(x) for x in IMAGE_DIR.iterdir()])
 
 
 def initial_view():
-    options = []
-    c1, c2, c3 = st.columns(3)
+    _, c1, c2, c3, _ = st.columns(5)
     c1.image(IMAGE_SELECTOR.select())
-    options.append(c2)
-    options.append(c3)
-
-
-    c1, c2, c3 = st.columns(3)
     c2.image(IMAGE_SELECTOR.select())
-    options.append(c1)
-    options.append(c3)
-
-
-    c1, c2, c3 = st.columns(3)
     c3.image(IMAGE_SELECTOR.select())
-    options.append(c1)
-    options.append(c2)
+    del c1, c2, c3
 
-    column = random.choice(options)
-    column.write("Have you come for a reading?")
+    st.markdown(
+        "<h1 style='text-align: center; color: purple;'>Have you come for a reading?</h1>",
+        unsafe_allow_html=True,
+    )
 
+    def _handle_click():
+        st.session_state.progress = States.gathering_description
 
+    st.button("Yes", use_container_width=True, on_click=_handle_click)
 
     #
     # g1c1, g1c2, g1c3 = st.columns((1, 2,1))
@@ -85,11 +85,50 @@ def initial_view():
     # g2c3.image(IMAGE_SELECTOR.select())
 
 
-def reading_underway_view():
-    pass
+def gather_info_view():
+    _, c1,  _ = st.columns(3)
+    c1.image(IMAGE_SELECTOR.select())
+    del c1
+
+    st.markdown(
+        "<h2 style='text-align: center; color: purple;'>Good.<br />First you must tell me about yourself.</h2>",
+        unsafe_allow_html=True,
+    )
+
+    with st.form("description-form"):
+        st.markdown(
+            "<h3 style='text-align: center; color: purple;'>Who are you?</h3>",
+            unsafe_allow_html=True,
+        )
+        self_description = st.text_area(
+            "Enter a brief description of yourself, perhaps share a bit about your beliefs, tarot experience, background or anything else.",
+        )
+        card_draw_type = st.selectbox(
+            "How would you like to select cards?",
+            ["Draw cards virtually", "Draw cards from your own tarot deck"],
+        )
+        st.form_submit_button()
+
+    _, c1, c2, c3, _ = st.columns(5)
+    c1.image(IMAGE_SELECTOR.select())
+    c2.image(IMAGE_SELECTOR.select())
+    c3.image(IMAGE_SELECTOR.select())
+    del c1, c2, c3
 
 
-if not st.session_state.reading_started:
+this_state = st.session_state.progress
+if this_state == States.initial:
     initial_view()
+elif this_state == States.gathering_description:
+    gather_info_view()
 else:
-    reading_underway_view()
+    pass
+st.write('&nbsp;')
+st.write('&nbsp;')
+st.write('&nbsp;')
+st.write('&nbsp;')
+_, c = st.columns((5, 1))
+if c.button("Restart"):
+    st.session_state.clear()
+    # st.session_state.progress = States.initial
+    st.experimental_rerun()
