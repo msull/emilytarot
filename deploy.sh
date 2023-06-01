@@ -1,1 +1,1 @@
-git pull && docker build . -t etapp:latest && DOMAIN=emilytarot.com docker stack deploy -c docker-compose.yaml emilytarot
+git pull && docker build . -t etapp:latest && docker stack deploy -c docker-compose.yaml emilytarot
