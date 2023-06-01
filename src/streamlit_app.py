@@ -13,10 +13,6 @@ class States:
     gathering_description = "gathering_description"
 
 
-if "progress" not in st.session_state:
-    st.session_state.progress = States.initial
-
-
 class Settings(BaseSettings):
     app_debug: bool = False
 
@@ -53,16 +49,33 @@ class RandomSelector:
 
 
 IMAGE_DIR = (Path(__file__).parent / "images").relative_to(Path(Path(__file__).parent))
-IMAGE_SELECTOR = RandomSelector([str(x) for x in IMAGE_DIR.iterdir()])
+
+
+@st.cache_resource
+def get_image_selector():
+    return RandomSelector([str(x) for x in IMAGE_DIR.iterdir()])
+
+
+IMAGE_SELECTOR = get_image_selector()
+
+if "progress" not in st.session_state:
+    st.session_state.progress = States.initial
+
+if "header_images" not in st.session_state:
+    st.session_state.header_images = [
+        IMAGE_SELECTOR.select(),
+        IMAGE_SELECTOR.select(),
+        IMAGE_SELECTOR.select(),
+    ]
+
+_, c1, c2, c3, _ = st.columns(5)
+c1.image(st.session_state.header_images[0])
+c2.image(st.session_state.header_images[1])
+c3.image(st.session_state.header_images[2])
+del c1, c2, c3
 
 
 def initial_view():
-    _, c1, c2, c3, _ = st.columns(5)
-    c1.image(IMAGE_SELECTOR.select())
-    c2.image(IMAGE_SELECTOR.select())
-    c3.image(IMAGE_SELECTOR.select())
-    del c1, c2, c3
-
     st.markdown(
         "<h1 style='text-align: center; color: purple;'>Have you come for a reading?</h1>",
         unsafe_allow_html=True,
@@ -86,7 +99,7 @@ def initial_view():
 
 
 def gather_info_view():
-    _, c1,  _ = st.columns(3)
+    _, c1, _ = st.columns(3)
     c1.image(IMAGE_SELECTOR.select())
     del c1
 
@@ -109,12 +122,6 @@ def gather_info_view():
         )
         st.form_submit_button()
 
-    _, c1, c2, c3, _ = st.columns(5)
-    c1.image(IMAGE_SELECTOR.select())
-    c2.image(IMAGE_SELECTOR.select())
-    c3.image(IMAGE_SELECTOR.select())
-    del c1, c2, c3
-
 
 this_state = st.session_state.progress
 if this_state == States.initial:
@@ -123,10 +130,10 @@ elif this_state == States.gathering_description:
     gather_info_view()
 else:
     pass
-st.write('&nbsp;')
-st.write('&nbsp;')
-st.write('&nbsp;')
-st.write('&nbsp;')
+st.write("&nbsp;")
+st.write("&nbsp;")
+st.write("&nbsp;")
+st.write("&nbsp;")
 _, c = st.columns((5, 1))
 if c.button("Restart"):
     st.session_state.clear()
