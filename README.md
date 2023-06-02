@@ -1,10 +1,8 @@
 # emilytarot
 
-AI-Based Tarot Readings via a Streamlit App
+AI-Based Tarot Readings via a Streamlit App-- an experiment in techno-mysticism.
 
 This is currently pretty quickly hacked together as a learning experience for streamlit and working with LLM models.
-
-An experiment in techno-mysticism.
 
 The code is rather ugly, and it's not too hard to break the app currently, but it's interesting to play with.
 
