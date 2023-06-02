@@ -21,6 +21,9 @@ COPY --chown=myuser:myuser requirements.txt /app
 RUN pip3 install --no-cache-dir -r requirements.txt
 # Copy the current directory contents into the container at /app
 COPY --chown=myuser:myuser src/ /app
+RUN mkdir /app/tarotSessions
+RUN chown myuser:myuser /app/tarotSessions
+
 USER myuser
 EXPOSE 8501
 #HEALTHCHECK CMD curl --fail http://localhost:8501/_stcore/health
