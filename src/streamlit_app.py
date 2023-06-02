@@ -1,14 +1,26 @@
+"""
+
+TODO:
+
+* Support more than one question per AI Statement
+* Support questions that occur at the same time as a card draw
+* Continue the session aftera card draw if the AI would like to do so
+
+"""
+
 import json
+import os
 import random
 from datetime import datetime
 from pathlib import Path
 from string import ascii_lowercase
 from typing import Tuple, Optional, Callable
-from uuid import uuid4
 
 import openai
 import streamlit as st
-from pydantic import BaseSettings
+
+APP_DEBUG = False
+SESSION_DIR = os.environ["SESSION_DIR"]
 
 st.set_page_config(
     layout="wide",
@@ -25,18 +37,7 @@ class States:
     interpret_cards = "interpret_cards"
 
 
-class Settings(BaseSettings):
-    app_debug: bool = False
-    session_dir: str
-
-
-# @st.cache_resource
-def get_settings():
-    return Settings()
-
-
-SETTINGS = get_settings()
-if not SETTINGS.app_debug:
+if not APP_DEBUG:
     hide_menu_style = """
             <style>
             # html { font-size: 140%;} 
@@ -90,7 +91,7 @@ def get_card_selector():
 
 
 def save_session():
-    path = Path(SETTINGS.session_dir) / (st.session_state.session_id + ".json")
+    path = Path(SESSION_DIR) / (st.session_state.session_id + ".json")
     path.write_text(json.dumps(st.session_state.to_dict()))
 
 
@@ -108,7 +109,7 @@ def init_state():
     if "progress" not in st.session_state:
         start_new_session = True
         if query_session:
-            path = Path(SETTINGS.session_dir) / (query_session + ".json")
+            path = Path(SESSION_DIR) / (query_session + ".json")
             try:
                 loaded_session_data = json.loads(path.read_text())
             except:

@@ -1,7 +1,2 @@
-boto
-humanize
 openai
-polars
-pydantic[email]
-requests
 streamlit
