@@ -5,15 +5,17 @@ services:
     image: etapp:latest
     networks:
       - traefik-public
+    environment:
+      OPENAI_API_KEY: "${OPENAI_API_KEY?Variable not set}"
     deploy:
       labels:
         - traefik.enable=true
         - traefik.docker.network=traefik-public
         - traefik.constraint-label=traefik-public
-        - traefik.http.routers.emilytarot-http.rule=Host(`test.emilytarot.com`)
+        - traefik.http.routers.emilytarot-http.rule=Host(`${DOMAIN?Variable not set}`)
         - traefik.http.routers.emilytarot-http.entrypoints=http
         - traefik.http.routers.emilytarot-http.middlewares=https-redirect
-        - traefik.http.routers.emilytarot-https.rule=Host(`test.emilytarot.com`)
+        - traefik.http.routers.emilytarot-https.rule=Host(`${DOMAIN?Variable not set}`)
         - traefik.http.routers.emilytarot-https.entrypoints=https
         - traefik.http.routers.emilytarot-https.tls=true
         - traefik.http.routers.emilytarot-https.tls.certresolver=le
