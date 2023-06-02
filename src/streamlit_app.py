@@ -1,6 +1,10 @@
+import json
 import random
+from datetime import datetime
 from pathlib import Path
+from string import ascii_lowercase
 from typing import Tuple, Optional, Callable
+from uuid import uuid4
 
 import openai
 import streamlit as st
@@ -23,6 +27,7 @@ class States:
 
 class Settings(BaseSettings):
     app_debug: bool = False
+    session_dir: str
 
 
 # @st.cache_resource
@@ -84,17 +89,48 @@ def get_card_selector():
     return RandomSelector(TAROT_DECK, already_selected=already_selected)
 
 
+def save_session():
+    path = Path(SETTINGS.session_dir) / (st.session_state.session_id + ".json")
+    path.write_text(json.dumps(st.session_state.to_dict()))
+
+
 def init_state():
+    query_session = st.experimental_get_query_params().get("s")
+    if query_session:
+        query_session = query_session[0]
+
+        if (
+            "session_id" in st.session_state
+            and st.session_state.session_id != query_session
+        ):
+            st.session_state.clear()
+
     if "progress" not in st.session_state:
-        IMAGE_SELECTOR = get_image_selector()
-        st.session_state.progress = States.initial
-        st.session_state.header_images = [
-            IMAGE_SELECTOR.select(),
-            IMAGE_SELECTOR.select(),
-            IMAGE_SELECTOR.select(),
-        ]
-        st.session_state.emily_image = IMAGE_SELECTOR.select()
-        st.session_state.chosen_intro = random.choice(INTROS)
+        start_new_session = True
+        if query_session:
+            path = Path(SETTINGS.session_dir) / (query_session + ".json")
+            try:
+                loaded_session_data = json.loads(path.read_text())
+            except:
+                pass
+            else:
+                for k, v in loaded_session_data.items():
+                    st.session_state[k] = v
+                start_new_session = False
+
+        if start_new_session:
+            print("Starting new session")
+            session_id = _date_id()
+            st.session_state.session_id = session_id
+            IMAGE_SELECTOR = get_image_selector()
+            st.session_state.progress = States.initial
+            st.session_state.header_images = [
+                IMAGE_SELECTOR.select(),
+                IMAGE_SELECTOR.select(),
+                IMAGE_SELECTOR.select(),
+            ]
+            st.session_state.emily_image = IMAGE_SELECTOR.select()
+            st.session_state.chosen_intro = random.choice(INTROS)
 
 
 def initial_view():
@@ -111,6 +147,8 @@ def initial_view():
     def _handle_click():
         st.session_state.card_draw_type = card_draw_type
         st.session_state.progress = States.gathering_description
+        st.experimental_set_query_params(s=st.session_state.session_id)
+        save_session()
 
     st.button("Yes", use_container_width=True, on_click=_handle_click)
 
@@ -146,8 +184,7 @@ def gather_info_view():
         else:
             print("No answer")
 
-    if _ask_question(question, container=st, handler=_handle_response):
-        breakpoint()
+    _ask_question(question, container=st, handler=_handle_response)
 
 
 def reading_in_progress_view():
@@ -165,12 +202,18 @@ def reading_in_progress_view():
         st.session_state.active_chat_response = _chat_qa()
 
     st.write(intro)
-    st.write(f"<div style='color: yellow;'> &gt; {st.session_state.self_intro}</div>", unsafe_allow_html=True)
+    st.write(
+        f"<div style='color: yellow;'> &gt; {st.session_state.self_intro}</div>",
+        unsafe_allow_html=True,
+    )
 
     for ai_msg, user_msg in st.session_state.reading_qa:
         ai_msg, _ = _extract_question(ai_msg)
         st.write(ai_msg)
-        st.write(f"<div style='color: yellow;'> &gt; {user_msg}</div>", unsafe_allow_html=True)
+        st.write(
+            f"<div style='color: yellow;'> &gt; {user_msg}</div>",
+            unsafe_allow_html=True,
+        )
 
     response = st.session_state.active_chat_response
     full_chat_response = response["choices"][0]["message"]["content"]
@@ -185,9 +228,7 @@ def reading_in_progress_view():
         else:
             st.error("Something has gone wrong...")
     else:
-        st.write(
-            f"<div style='color: purple;'>{chat_response}</div>", unsafe_allow_html=True
-        )
+        st.write(chat_response)
 
         def _handle_response(answer):
             if answer:
@@ -212,12 +253,18 @@ def tarot_cards_view():
 
     intro, _ = _extract_question(st.session_state.chosen_intro)
     st.write(intro)
-    st.write(f"<div style='color: yellow;'> &gt; {st.session_state.self_intro}</div>", unsafe_allow_html=True)
+    st.write(
+        f"<div style='color: yellow;'> &gt; {st.session_state.self_intro}</div>",
+        unsafe_allow_html=True,
+    )
 
     for ai_msg, user_msg in st.session_state.reading_qa:
         ai_msg, _ = _extract_question(ai_msg)
         st.write(ai_msg)
-        st.write(f"<div style='color: yellow;'> &gt; {user_msg}</div>", unsafe_allow_html=True)
+        st.write(
+            f"<div style='color: yellow;'> &gt; {user_msg}</div>",
+            unsafe_allow_html=True,
+        )
 
     response = st.session_state.active_chat_response
     full_chat_response: str = response["choices"][0]["message"]["content"].strip()
@@ -261,6 +308,7 @@ def tarot_cards_view():
             st.session_state.all_chosen_cards.extend(cards)
             st.session_state.just_now_chosen_cards = cards
             st.session_state.progress = States.interpret_cards
+            st.experimental_rerun()
 
 
 def interpret_cards_view():
@@ -271,12 +319,18 @@ def interpret_cards_view():
 
     intro, _ = _extract_question(st.session_state.chosen_intro)
     st.write(intro)
-    st.write(f"<div style='color: yellow;'> &gt; {st.session_state.self_intro}</div>", unsafe_allow_html=True)
+    st.write(
+        f"<div style='color: yellow;'> &gt; {st.session_state.self_intro}</div>",
+        unsafe_allow_html=True,
+    )
 
     for ai_msg, user_msg in st.session_state.reading_qa:
         ai_msg, _ = _extract_question(ai_msg)
         st.write(ai_msg)
-        st.write(f"<div style='color: yellow;'> &gt; {user_msg}</div>", unsafe_allow_html=True)
+        st.write(
+            f"<div style='color: yellow;'> &gt; {user_msg}</div>",
+            unsafe_allow_html=True,
+        )
 
     response = st.session_state.active_chat_response
     full_chat_response: str = response["choices"][0]["message"]["content"].strip()
@@ -319,12 +373,16 @@ def main():
         initial_view()
     elif this_state == States.gathering_description:
         gather_info_view()
+        save_session()
     elif this_state == States.reading_in_progress:
         reading_in_progress_view()
+        save_session()
     elif this_state == States.draw_cards:
         tarot_cards_view()
+        save_session()
     elif this_state == States.interpret_cards:
         interpret_cards_view()
+        save_session()
 
     st.caption(
         "All art and text generated by Artificial Intelligence - for entertainment purposes only"
@@ -400,6 +458,11 @@ def _chat_interpret():
         model="gpt-3.5-turbo",
         messages=chat_history,
     )
+
+
+def _date_id(now=None):
+    now = now or datetime.utcnow()
+    return now.strftime("%Y%m%d%H%M") + "".join(random.choices(ascii_lowercase, k=6))
 
 
 INTROS = [
@@ -556,4 +619,3 @@ TAROT_DECK = [
 
 
 main()
-# st.session_state

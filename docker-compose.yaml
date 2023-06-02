@@ -7,6 +7,9 @@ services:
       - traefik-public
     environment:
       OPENAI_API_KEY: "${OPENAI_API_KEY?Variable not set}"
+      SESSION_DIR: "/app/tarotSessions"
+    volumes:
+      - tarotSessions:/app/tarotSessions
     deploy:
       labels:
         - traefik.enable=true
@@ -20,6 +23,9 @@ services:
         - traefik.http.routers.emilytarot-https.tls=true
         - traefik.http.routers.emilytarot-https.tls.certresolver=le
         - traefik.http.services.emilytarot.loadbalancer.server.port=8501
+
+volumes:
+  tarotSessions: {}
 
 networks:
   traefik-public:
