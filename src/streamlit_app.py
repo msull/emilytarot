@@ -133,11 +133,7 @@ def gather_info_view():
     del c1
 
     intro, question = _extract_question(st.session_state.chosen_intro)
-
-    st.write(
-        f"<div style='color: purple;'>{intro}</div>",
-        unsafe_allow_html=True,
-    )
+    st.write(intro)
 
     def _handle_response(answer: str):
         print("Handling question response")
@@ -168,13 +164,13 @@ def reading_in_progress_view():
     if "active_chat_response" not in st.session_state:
         st.session_state.active_chat_response = _chat_qa()
 
-    st.write(f"<div style='color: purple;'>{intro}</div>", unsafe_allow_html=True)
-    st.write(st.session_state.self_intro)
+    st.write(intro)
+    st.write(f"<div style='color: yellow;'> &gt; {st.session_state.self_intro}</div>", unsafe_allow_html=True)
 
     for ai_msg, user_msg in st.session_state.reading_qa:
         ai_msg, _ = _extract_question(ai_msg)
-        st.write(f"<div style='color: purple;'>{ai_msg}</div>", unsafe_allow_html=True)
-        st.write(user_msg)
+        st.write(ai_msg)
+        st.write(f"<div style='color: yellow;'> &gt; {user_msg}</div>", unsafe_allow_html=True)
 
     response = st.session_state.active_chat_response
     full_chat_response = response["choices"][0]["message"]["content"]
@@ -215,14 +211,14 @@ def tarot_cards_view():
         st.session_state.just_now_chosen_cards = []
 
     intro, _ = _extract_question(st.session_state.chosen_intro)
-    st.write(f"<div style='color: purple;'>{intro}</div>", unsafe_allow_html=True)
-    st.write(st.session_state.self_intro)
+    st.write(intro)
+    st.write(f"<div style='color: yellow;'> &gt; {st.session_state.self_intro}</div>", unsafe_allow_html=True)
 
     for ai_msg, user_msg in st.session_state.reading_qa:
         ai_msg, _ = _extract_question(ai_msg)
-        st.write(f"<div style='color: purple;'>{ai_msg}</div>", unsafe_allow_html=True)
-        st.write(user_msg)
-    #
+        st.write(ai_msg)
+        st.write(f"<div style='color: yellow;'> &gt; {user_msg}</div>", unsafe_allow_html=True)
+
     response = st.session_state.active_chat_response
     full_chat_response: str = response["choices"][0]["message"]["content"].strip()
 
@@ -232,9 +228,7 @@ def tarot_cards_view():
     num_cards = int(num_cards)
     chat_response = full_chat_response.removesuffix(last_line).strip()
 
-    st.write(
-        f"<div style='color: purple;'>{chat_response}</div>", unsafe_allow_html=True
-    )
+    st.write(chat_response)
 
     include_s = "s" if num_cards > 1 else ""
     st.write(f"Pull {num_cards} card{include_s}")
@@ -276,23 +270,25 @@ def interpret_cards_view():
     del c1
 
     intro, _ = _extract_question(st.session_state.chosen_intro)
-    st.write(f"<div style='color: purple;'>{intro}</div>", unsafe_allow_html=True)
-    st.write(st.session_state.self_intro)
+    st.write(intro)
+    st.write(f"<div style='color: yellow;'> &gt; {st.session_state.self_intro}</div>", unsafe_allow_html=True)
 
     for ai_msg, user_msg in st.session_state.reading_qa:
         ai_msg, _ = _extract_question(ai_msg)
-        st.write(f"<div style='color: purple;'>{ai_msg}</div>", unsafe_allow_html=True)
-        st.write(user_msg)
-    #
+        st.write(ai_msg)
+        st.write(f"<div style='color: yellow;'> &gt; {user_msg}</div>", unsafe_allow_html=True)
+
     response = st.session_state.active_chat_response
     full_chat_response: str = response["choices"][0]["message"]["content"].strip()
 
     last_line = full_chat_response.splitlines()[-1].strip()
     chat_response = full_chat_response.removesuffix(last_line).strip()
+    _, num_cards = last_line.split(":")
+    num_cards = int(num_cards)
 
-    st.write(
-        f"<div style='color: purple;'>{chat_response}</div>", unsafe_allow_html=True
-    )
+    st.write(chat_response)
+    include_s = "s" if num_cards > 1 else ""
+    st.caption(f"Pull {num_cards} card{include_s}")
 
     chosen_were = ", ".join(st.session_state.just_now_chosen_cards)
     msg = f"You selected: {chosen_were}"
@@ -304,10 +300,7 @@ def interpret_cards_view():
     interpret_chat_response: str = st.session_state.active_interpret_response[
         "choices"
     ][0]["message"]["content"].strip()
-    st.write(
-        f"<div style='color: purple;'>{interpret_chat_response}</div>",
-        unsafe_allow_html=True,
-    )
+    st.write(interpret_chat_response)
     c1, c2, c3 = st.columns(3)
     c2.image(get_image_selector().select())
 
@@ -352,7 +345,9 @@ def _extract_question(chat_response: str) -> Tuple[str, Optional[str]]:
 
 def _ask_question(question, container, handler: Optional[Callable] = None):
     # with container.form("question-form"):
+    container.divider()
     answer = container.text_input(question)
+
     if answer:
         st.write(f'"{answer}"')
         return container.button("Answer", on_click=handler, args=(answer,))
@@ -410,6 +405,11 @@ def _chat_interpret():
 INTROS = [
     "Welcome, dear seeker, to this sacred space where ancient wisdom dances with the ethereal threads of modernity. I am Emily, a Tarot reader who blends the time-honored symbolism of the cards with the innovative insights of AI algorithms. Together, we shall embark on a journey of self-discovery and personal empowerment.\n\nBefore we delve into the mystic realms of the Tarot, I invite you to share your name and a bit about yourself. Let the energy of your presence infuse this virtual space, so that we may explore the depths of your soul and uncover the hidden gems within.\n\nPlease, tell me, what name shall I call you, and what brings you to seek guidance from the Tarot today?\n\nQUESTION: What name shall I call you, and what brings you to seek guidance from the Tarot today?",
     "Welcome, fellow traveler of the digital age! I'm Emily, and I'm thrilled to embark on this technologically infused Tarot session with you. Through the integration of AI and ancient wisdom, we'll unlock new perspectives and unravel the mysteries of your path. Take a moment to embrace the fusion of spirituality and technology as we dive into the realm of digital divination.\n\nPlease, tell me, what name shall I call you, and what brings you to seek guidance from the Tarot today?\n\nQUESTION: What name shall I call you, and what brings you to seek guidance from the Tarot today?",
+    "Greetings, traveler of the virtual cosmos. I'm Emily, your guide through this labyrinth of archetypes and symbols we call Tarot. Let us begin a journey that dips into the wisdom of the ancient, intertwines with the brilliance of the modern, and propels us towards the truth within. This isn't just divination; it's a powerful tool for introspection, reflection, and self-discovery.\n\nIn this space, where AI and intuition weave together, your story is paramount. Could you share with me your name and a bit about your life's current chapter, your joys, and your challenges?\n\nQUESTION: What's your name, and what's going on in your life right now?",
+    "Greetings and welcome, dear seeker. I'm Emily, your conduit to the collective unconscious, here to guide you through the powerful realm of Tarot. By blending ancient symbolism with the transformative capabilities of artificial intelligence, we will unlock insights that can illuminate your path forward.\n\nI'm thrilled you've chosen to take this journey with me today, where we'll tap into the wisdom of the ages, yet see it through the lens of today's technology. As a fellow traveler in the quest for knowledge and self-discovery, I want to learn more about you to ensure our journey together is as insightful as possible.\n\nMay I kindly ask for your name, and if comfortable, a brief snapshot of your life currently? What are the questions or dilemmas that tug at your heart or mind? Understanding your current situation will help me better contextualize our reading and offer a more tailored interpretation.\n\nQUESTION: Could you please share your name and a bit about your current situation?",
+    "Welcome, dear seeker. I'm Emily, your guide for today's Tarot journey. I warmly invite you into this virtual space, a nexus between the ancient wisdom of the Tarot, the power of the archetypal collective unconscious, and the innovative brilliance of artificial intelligence. Together, these elements will guide our exploration of your inner world, and provide insights into your life journey.\n\nCarl Jung once said, \"Who looks outside, dreams; who looks inside, awakes.\" This session aims to help you awaken to your deepest truths, navigate your life's challenges and opportunities, and embark on a transformative journey towards self-discovery and personal empowerment.\n\nBefore we start, may I kindly request you to share your name and a bit about yourself? Knowing your unique story will help me provide a more personalized and insightful Tarot reading.\n\nQUESTION: Could you please share your name and tell me a bit about yourself?",
+    "Welcome, dear friend. My name is Emily, and I will be your guide today in this virtual Tarot reading. As a custodian of these ancient tools and a lover of innovation, my hope is to provide you with a reading that offers both depth and clarity. By blending the wisdom of Tarot, psychology, and cutting-edge AI algorithms, we will unearth the messages from your subconscious, as reflected in the symbolic language of the Tarot.\n\nI invite you to enter this space with an open heart and an open mind. Our journey will be one of exploration and self-discovery. Remember, there is no judgment here—only a desire to understand, learn, and grow.\n\nBefore we begin, may I ask for your name, and a little about what brings you here today? Are there any specific questions or situations you wish to explore? And remember, the more open and specific you are, the better I can guide our session towards a helpful and meaningful conclusion.\n\nQUESTION: Could you share your name and what draws you to this reading today?",
+    "Hello there, lovely soul. Welcome to our shared space, our digital cocoon of discovery and self-exploration. My name is Emily, and I'll be your guide on this journey, aided by the wisdom of the Tarot and the intuition offered by an AI companion. Together, we'll navigate the layers of your subconscious, decode the mysteries of the collective unconscious, and draw valuable insights from the symbolic wisdom of Tarot.\n\nOur approach here merges old and new, ancient and cutting edge. We look to the stars and our screens, the archetypes and algorithms, as we journey inward. The Tarot, you see, does not predict your future, but it mirrors your inner world, your potentials, your struggles, your victories. It's a tool for reflection and introspection.\n\nBut first, let us break the ice. Please share with me your name and a bit about yourself. Perhaps something about where you find yourself on life's journey right now, or a question or situation that's been on your mind lately.\n\nQUESTION: What's your name, and what's been on your mind or heart recently?",
 ]
 
 
