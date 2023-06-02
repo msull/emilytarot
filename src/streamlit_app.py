@@ -276,6 +276,9 @@ def interpret_cards_view():
     del c1
 
     intro, _ = _extract_question(st.session_state.chosen_intro)
+    st.write(f"<div style='color: purple;'>{intro}</div>", unsafe_allow_html=True)
+    st.write(st.session_state.self_intro)
+
     for ai_msg, user_msg in st.session_state.reading_qa:
         ai_msg, _ = _extract_question(ai_msg)
         st.write(f"<div style='color: purple;'>{ai_msg}</div>", unsafe_allow_html=True)
