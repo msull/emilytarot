@@ -47,7 +47,7 @@ INTERPRET_SYSTEM_MESSAGE = f"""\
 
 Now that the card(s) have been drawn and revealed, it is your job to complete the tarot reading.
 Provide a 2 sentence interpretation of each card as Emily, 
-then use the role of Emily to produce a cohesive narrative linking these three cards together 
+then use the role of Emily to produce a cohesive narrative linking all of the drawn cards together 
 """
 
 REINFORCEMENT_SYSTEM_MSG = """\
