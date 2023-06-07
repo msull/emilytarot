@@ -1,0 +1,32 @@
+version: "3"
+
+services:
+  emilytarot:
+    image: emilytarot:latest
+    networks:
+      - traefik-public
+    environment:
+      OPENAI_API_KEY: "${OPENAI_API_KEY?Variable not set}"
+      SESSION_DIR: "/app/tarotSessions"
+    volumes:
+      - tarotSessions:/app/tarotSessions
+    deploy:
+      labels:
+        - traefik.enable=true
+        - traefik.docker.network=traefik-public
+        - traefik.constraint-label=traefik-public
+        - traefik.http.routers.emilytarot-http.rule=Host(`${DOMAIN?Variable not set}`)
+        - traefik.http.routers.emilytarot-http.entrypoints=http
+        - traefik.http.routers.emilytarot-http.middlewares=https-redirect
+        - traefik.http.routers.emilytarot-https.rule=Host(`${DOMAIN?Variable not set}`)
+        - traefik.http.routers.emilytarot-https.entrypoints=https
+        - traefik.http.routers.emilytarot-https.tls=true
+        - traefik.http.routers.emilytarot-https.tls.certresolver=le
+        - traefik.http.services.emilytarot.loadbalancer.server.port=8501
+
+volumes:
+  tarotSessions: {}
+
+networks:
+  traefik-public:
+    external: true
