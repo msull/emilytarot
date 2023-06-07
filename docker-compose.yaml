@@ -2,13 +2,12 @@ version: "3"
 
 services:
   emilytarot:
-    image: etapp:latest
+    image: emilytarot:latest
     networks:
       - traefik-public
     environment:
       OPENAI_API_KEY: "${OPENAI_API_KEY?Variable not set}"
       SESSION_DIR: "/app/tarotSessions"
-      RANDOM_NUM: "${RANDOM}"
     volumes:
       - tarotSessions:/app/tarotSessions
     deploy:
