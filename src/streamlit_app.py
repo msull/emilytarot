@@ -11,6 +11,7 @@ TODO:
 import json
 import os
 import random
+from dataclasses import dataclass, field
 from datetime import datetime
 from pathlib import Path
 from string import ascii_lowercase
@@ -44,23 +45,20 @@ class States:
     interpret_cards = "interpret_cards"
 
 
+@dataclass
 class RandomSelector:
-    def __init__(self, input_list, already_selected: Optional[list] = None):
-        self.input_list = input_list
-        self.selected = []
-
-        if already_selected:
-            for selected_element in already_selected:
-                self.input_list.remove(selected_element)
-                self.selected.append(selected_element)
+    elements: list
+    used_elements: set = field(default_factory=set)
 
     def select(self):
-        if len(self.input_list) == 0:
+        if len(self.used_elements) == len(self.elements):
             raise ValueError("All elements have been selected.")
-        selected_element = random.choice(self.input_list)
-        self.input_list.remove(selected_element)
-        self.selected.append(selected_element)
-        return selected_element
+
+        while True:
+            element = random.choice(self.elements)
+            if element not in self.used_elements:
+                self.used_elements.add(element)
+                return element
 
 
 IMAGE_DIR = (Path(__file__).parent / "images").relative_to(Path(__file__).parent)
@@ -72,9 +70,9 @@ def get_image_selector():
             st.session_state.emily_image
         ]
     else:
-        already_selected = None
+        already_selected = []
     return RandomSelector(
-        [str(x) for x in IMAGE_DIR.iterdir()], already_selected=already_selected
+        [str(x) for x in IMAGE_DIR.iterdir()], used_elements=set(already_selected)
     )
 
 
@@ -82,8 +80,8 @@ def get_card_selector():
     if "chosen_virtual_cards" in st.session_state:
         already_selected = st.session_state.chosen_virtual_cards
     else:
-        already_selected = None
-    return RandomSelector(TAROT_DECK, already_selected=already_selected)
+        already_selected = []
+    return RandomSelector(TAROT_DECK, used_elements=set(already_selected))
 
 
 def save_session():
@@ -395,7 +393,9 @@ def _ask_question(question, container, handler: Optional[Callable] = None):
 
     if answer:
         st.write(f'"{answer}"')
-        return container.button("Answer", on_click=handler, args=(answer,))
+    return container.button(
+        "Answer", on_click=handler, args=(answer,), disabled=not answer
+    )
 
 
 def _chat_qa():
