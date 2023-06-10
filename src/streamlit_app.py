@@ -1,30 +1,20 @@
-"""
-
-TODO:
-
-* Support more than one question per AI Statement
-* Support questions that occur at the same time as a card draw
-* Continue the session aftera card draw if the AI would like to do so
-
-"""
-
 import json
 import os
 import random
-from dataclasses import dataclass, field
-from datetime import datetime
+from dataclasses import dataclass
 from pathlib import Path
-from string import ascii_lowercase
-from typing import Tuple, Optional, Callable
+from typing import List
+from uuid import uuid4
 
 import openai
 import streamlit as st
 
+from utils.helpers import date_id
 from utils.messages import (
-    INTERPRET_SYSTEM_MESSAGE,
     REINFORCEMENT_SYSTEM_MSG,
     INITIAL_SYSTEM_MSG,
     INTROS,
+    CARDS_REINFORCEMENT_SYSTEM_MSG,
 )
 from utils.tarot import TAROT_DECK
 
@@ -37,56 +27,42 @@ st.set_page_config(
 )
 
 
-class States:
-    initial = "initial"
-    gathering_description = "gathering_description"
-    reading_in_progress = "reading_in_progress"
-    draw_cards = "draw_cards"
-    interpret_cards = "interpret_cards"
-
-
-@dataclass
-class RandomSelector:
-    elements: list
-    used_elements: set = field(default_factory=set)
-
-    def select(self):
-        if len(self.used_elements) == len(self.elements):
-            raise ValueError("All elements have been selected.")
-
-        while True:
-            element = random.choice(self.elements)
-            if element not in self.used_elements:
-                self.used_elements.add(element)
-                return element
-
-
 IMAGE_DIR = (Path(__file__).parent / "images").relative_to(Path(__file__).parent)
 
 
-def get_image_selector():
-    if "header_images" in st.session_state:
-        already_selected = st.session_state.header_images + [
-            st.session_state.emily_image
-        ]
-    else:
-        already_selected = []
-    return RandomSelector(
-        [str(x) for x in IMAGE_DIR.iterdir()], used_elements=set(already_selected)
-    )
-
-
-def get_card_selector():
-    if "chosen_virtual_cards" in st.session_state:
-        already_selected = st.session_state.chosen_virtual_cards
-    else:
-        already_selected = []
-    return RandomSelector(TAROT_DECK, used_elements=set(already_selected))
-
-
 def save_session():
+    st.experimental_set_query_params(s=st.session_state.session_id)
     path = Path(SESSION_DIR) / (st.session_state.session_id + ".json")
     path.write_text(json.dumps(st.session_state.to_dict()))
+
+
+@dataclass
+class ChatSession:
+    initial_message: str
+
+    def __post_init__(self):
+        self.history = [{"role": "assistant", "content": self.initial_message}]
+
+    def user_says(self, message):
+        self.history.append({"role": "user", "content": message})
+
+    def system_says(self, message):
+        self.history.append({"role": "system", "content": message})
+
+    def assistant_says(self, message):
+        self.history.append({"role": "assistant", "content": message})
+
+    def get_history(self):
+        return self.history
+
+    def to_dict(self):
+        return {"initial_message": self.initial_message, "history": self.history}
+
+    @classmethod
+    def from_dict(cls, data):
+        cs = ChatSession(initial_message=data["initial_message"])
+        cs.history = data["history"]
+        return cs
 
 
 def init_state():
@@ -100,8 +76,8 @@ def init_state():
         ):
             st.session_state.clear()
 
-    if "progress" not in st.session_state:
-        start_new_session = True
+    if "reading_in_progress" not in st.session_state:
+        start_new_reading = True
         if query_session:
             path = Path(SESSION_DIR) / (query_session + ".json")
             try:
@@ -111,21 +87,27 @@ def init_state():
             else:
                 for k, v in loaded_session_data.items():
                     st.session_state[k] = v
-                start_new_session = False
+                start_new_reading = False
 
-        if start_new_session:
-            print("Starting new session")
-            session_id = _date_id()
+        if start_new_reading:
+            print("Starting new reading")
+            st.session_state.reading_in_progress = True
+            st.session_state.started_chat = False
+
+            session_id = date_id()
             st.session_state.session_id = session_id
-            IMAGE_SELECTOR = get_image_selector()
-            st.session_state.progress = States.initial
-            st.session_state.header_images = [
-                IMAGE_SELECTOR.select(),
-                IMAGE_SELECTOR.select(),
-                IMAGE_SELECTOR.select(),
-            ]
-            st.session_state.emily_image = IMAGE_SELECTOR.select()
-            st.session_state.chosen_intro = random.choice(INTROS)
+            imgs = random.sample(
+                [str(x) for x in IMAGE_DIR.iterdir() if x.name != "emily.png"], k=4
+            )
+            st.session_state.header_images = [imgs[0], imgs[1], imgs[2]]
+            st.session_state.emily_image = str(IMAGE_DIR / "emily.png")
+            st.session_state.closing_image = imgs[3]
+
+            cs = ChatSession(initial_message=random.choice(INTROS))
+            st.session_state.chat_session = cs.to_dict()
+            st.session_state.chosen_virtual_cards = []
+            st.session_state.all_chosen_cards = []
+            st.session_state.total_tokens_used = 0
 
 
 def initial_view():
@@ -141,207 +123,39 @@ def initial_view():
 
     def _handle_click():
         st.session_state.card_draw_type = card_draw_type
-        st.session_state.progress = States.gathering_description
-        st.experimental_set_query_params(s=st.session_state.session_id)
+        st.session_state.started_chat = True
 
     st.button("Yes", use_container_width=True, on_click=_handle_click)
 
 
-def gather_info_view():
-    print("DRAWING INITIAL INFO VIEW")
-    _, c1, _ = st.columns(3)
-    c1.image(st.session_state.emily_image)
-    del c1
-
-    intro, question = _extract_question(st.session_state.chosen_intro)
-    st.write(intro)
-
-    def _handle_response(answer: str):
-        print("Handling question response")
-        print(answer)
-
-        answer = answer.strip()
-        if answer:
-            st.session_state.progress = States.reading_in_progress
-            st.session_state.self_intro = answer
-        else:
-            print("No answer")
-
-    _ask_question(question, container=st, handler=_handle_response)
+@dataclass
+class AiCommands:
+    questions_to_ask: List[str]
+    draw_cards: int
+    cleaned_content: str
 
 
-def reading_in_progress_view():
-    print("DRAWING QA PROGRESS VIEW")
-    _, c1, _ = st.columns(3)
-    c1.image(st.session_state.emily_image)
-    del c1
+def _extract_commands(content: str) -> AiCommands:
+    """Extract questions and number of cards to draw from the message; return the cleaned string without those cmds."""
+    num_cards = 0
+    questions = []
+    remove_lines = []
+    for line in content.splitlines():
+        if line.startswith("QUESTION: "):
+            questions.append(line.removeprefix("QUESTION: "))
+            remove_lines.append(line)
+        elif line.startswith("PULL TAROT CARDS"):
+            _, num_cards_str = line.split(":")
+            num_cards += int(num_cards_str)
+            remove_lines.append(line)
 
-    intro, _ = _extract_question(st.session_state.chosen_intro)
+    for line in remove_lines:
+        content = content.replace(line, "")
+    content = content.replace("\n\n\n", "\n\n")
 
-    if "reading_qa" not in st.session_state:
-        st.session_state.reading_qa = []
-
-    if "active_chat_response" not in st.session_state:
-        with st.spinner("Generating AI response"):
-            st.session_state.active_chat_response = _chat_qa()
-
-    st.write(intro)
-    st.write(
-        f"<div style='color: yellow;'> &gt; {st.session_state.self_intro}</div>",
-        unsafe_allow_html=True,
+    return AiCommands(
+        questions_to_ask=questions, draw_cards=num_cards, cleaned_content=content
     )
-
-    for ai_msg, user_msg in st.session_state.reading_qa:
-        ai_msg, _ = _extract_question(ai_msg)
-        st.write(ai_msg)
-        st.write(
-            f"<div style='color: yellow;'> &gt; {user_msg}</div>",
-            unsafe_allow_html=True,
-        )
-
-    response = st.session_state.active_chat_response
-    full_chat_response = response["choices"][0]["message"]["content"]
-    chat_response, question = _extract_question(full_chat_response)
-
-    if not question:
-        time_for_tarot = "PULL TAROT CARDS" in chat_response
-        if time_for_tarot:
-            st.session_state.progress = States.draw_cards
-            st.experimental_rerun()
-            print("TIME TO PULL TAROT CARDS")
-        else:
-            st.error("Something has gone wrong...")
-    else:
-        st.write(chat_response)
-
-        def _handle_response(answer):
-            if answer:
-                print("Got answer")
-                st.session_state.reading_qa.append((full_chat_response, answer))
-                del st.session_state.active_chat_response
-            else:
-                print("No answer")
-
-        _ask_question(question, container=st, handler=_handle_response)
-
-
-def tarot_cards_view():
-    print("DRAWING TAROT VIEW")
-    _, c1, _ = st.columns(3)
-    c1.image(st.session_state.emily_image)
-    del c1
-
-    if "all_chosen_cards" not in st.session_state:
-        st.session_state.all_chosen_cards = []
-        st.session_state.just_now_chosen_cards = []
-
-    intro, _ = _extract_question(st.session_state.chosen_intro)
-    st.write(intro)
-    st.write(
-        f"<div style='color: yellow;'> &gt; {st.session_state.self_intro}</div>",
-        unsafe_allow_html=True,
-    )
-
-    for ai_msg, user_msg in st.session_state.reading_qa:
-        ai_msg, _ = _extract_question(ai_msg)
-        st.write(ai_msg)
-        st.write(
-            f"<div style='color: yellow;'> &gt; {user_msg}</div>",
-            unsafe_allow_html=True,
-        )
-
-    response = st.session_state.active_chat_response
-    full_chat_response: str = response["choices"][0]["message"]["content"].strip()
-
-    last_line = full_chat_response.splitlines()[-1].strip()
-    print(full_chat_response)
-    _, num_cards = last_line.split(":")
-    num_cards = int(num_cards)
-    chat_response = full_chat_response.removesuffix(last_line).strip()
-
-    st.write(chat_response)
-
-    include_s = "s" if num_cards > 1 else ""
-    st.write(f"Pull {num_cards} card{include_s}")
-    if st.session_state.card_draw_type == "Draw cards virtually":
-        if "chosen_virtual_cards" not in st.session_state:
-            st.session_state.chosen_virtual_cards = []
-        if st.button("Switch to your own Tarot deck"):
-            del st.session_state.chosen_virtual_cards
-            st.session_state.card_draw_type = "Draw cards from your own tarot deck"
-            st.experimental_rerun()
-
-        if len(st.session_state.chosen_virtual_cards) < num_cards:
-            if st.button("Draw Card"):
-                st.session_state.chosen_virtual_cards.append(
-                    get_card_selector().select()
-                )
-                st.experimental_rerun()
-
-        cards = st.session_state.chosen_virtual_cards
-
-    else:
-        if st.button("Switch to drawing virtual cards"):
-            st.session_state.card_draw_type = "Draw cards virtually"
-            st.experimental_rerun()
-        st.write("Shuffle your deck and draw cards as instructed")
-        cards = [st.selectbox(f"Card {x}", TAROT_DECK) for x in range(1, num_cards + 1)]
-    st.write(cards)
-    if len(cards) == num_cards:
-        if st.button("Submit"):
-            st.session_state.all_chosen_cards.extend(cards)
-            st.session_state.just_now_chosen_cards = cards
-            st.session_state.progress = States.interpret_cards
-            st.experimental_rerun()
-
-
-def interpret_cards_view():
-    print("DRAWING INTERPRET VIEW")
-    _, c1, _ = st.columns(3)
-    c1.image(st.session_state.emily_image)
-    del c1
-
-    intro, _ = _extract_question(st.session_state.chosen_intro)
-    st.write(intro)
-    st.write(
-        f"<div style='color: yellow;'> &gt; {st.session_state.self_intro}</div>",
-        unsafe_allow_html=True,
-    )
-
-    for ai_msg, user_msg in st.session_state.reading_qa:
-        ai_msg, _ = _extract_question(ai_msg)
-        st.write(ai_msg)
-        st.write(
-            f"<div style='color: yellow;'> &gt; {user_msg}</div>",
-            unsafe_allow_html=True,
-        )
-
-    response = st.session_state.active_chat_response
-    full_chat_response: str = response["choices"][0]["message"]["content"].strip()
-
-    last_line = full_chat_response.splitlines()[-1].strip()
-    chat_response = full_chat_response.removesuffix(last_line).strip()
-    _, num_cards = last_line.split(":")
-    num_cards = int(num_cards)
-
-    st.write(chat_response)
-    include_s = "s" if num_cards > 1 else ""
-    st.caption(f"Pull {num_cards} card{include_s}")
-
-    chosen_were = ", ".join(st.session_state.just_now_chosen_cards)
-    msg = f"You selected: {chosen_were}"
-    st.write(f"<em style='color: yellow;'>{msg}</em>", unsafe_allow_html=True)
-
-    if "active_interpret_response" not in st.session_state:
-        with st.spinner("Generating AI response"):
-            st.session_state.active_interpret_response = _chat_interpret()
-
-    interpret_chat_response: str = st.session_state.active_interpret_response[
-        "choices"
-    ][0]["message"]["content"].strip()
-    st.write(interpret_chat_response)
-    c1, c2, c3 = st.columns(3)
-    c2.image(get_image_selector().select())
 
 
 def main():
@@ -353,63 +167,187 @@ def main():
     c3.image(st.session_state.header_images[2])
     del c1, c2, c3
 
-    this_state = st.session_state.progress
-    if this_state == States.initial:
+    if not st.session_state.started_chat:
         initial_view()
-    elif this_state == States.gathering_description:
-        gather_info_view()
-    elif this_state == States.reading_in_progress:
-        reading_in_progress_view()
-        save_session()
-    elif this_state == States.draw_cards:
-        tarot_cards_view()
-        save_session()
-    elif this_state == States.interpret_cards:
-        interpret_cards_view()
+        return
+
+    _, c1, _ = st.columns(3)
+    c1.image(st.session_state.emily_image)
+    del c1
+
+    chat_session = ChatSession.from_dict(st.session_state.chat_session)
+
+    for msg in chat_session.get_history():
+        if msg["role"] == "assistant":
+            st.write(_extract_commands(msg["content"]).cleaned_content)
+        elif msg["role"] == "user":
+            st.write(
+                f"<div style='color: yellow;'> &gt; {msg['content']}</div>",
+                unsafe_allow_html=True,
+            )
+        elif msg["role"] == "system":
+            if msg["content"].startswith("The selected cards were"):
+                st.write(
+                    f"<div style='color: red;'> &gt; {msg['content']}</div>",
+                    unsafe_allow_html=True,
+                )
+
+    ai_commands = _extract_commands(chat_session.get_history()[-1]["content"])
+
+    if not (ai_commands.draw_cards or ai_commands.questions_to_ask):
+        # reading is over
+        _, c1, _ = st.columns(3)
+        c1.image(st.session_state.closing_image)
+        del c1
+        if st.button("Start new session", use_container_width=True, type="primary"):
+            st.session_state.clear()
+            st.experimental_rerun()
+        return
+
+    virtual_cards = st.session_state.card_draw_type == "Draw cards virtually"
+
+    with st.form("user-input-form"):
+        answers = []
+        cards = []
+        for question in ai_commands.questions_to_ask:
+            answers.append(st.text_area(question))
+
+        num_cards = 0
+        if ai_commands.draw_cards:
+            num_cards = ai_commands.draw_cards
+            include_s = "s" if num_cards > 1 else ""
+            st.write(f"Pull {num_cards} card{include_s}")
+
+            if virtual_cards:
+                if st.form_submit_button("Switch to your own Tarot deck"):
+                    st.session_state.chosen_virtual_cards = []
+                    st.session_state.card_draw_type = (
+                        "Draw cards from your own tarot deck"
+                    )
+                    st.experimental_rerun()
+                st.write("Use the buttons below to virtually shuffle and pull cards")
+                c1, c2, c3, _ = st.columns((1, 1, 1, 2))
+                shuffle_seed = c1.text_input(
+                    "Shuffle Value",
+                    value=st.session_state.get("shuffle_seed", uuid4().hex),
+                    help="This value will be used to seed the random generator before drawing cards",
+                )
+                if shuffle_seed:
+                    st.session_state.shuffle_seed = shuffle_seed
+
+                if c2.form_submit_button("Shuffle"):
+                    st.session_state.shuffle_seed = uuid4().hex
+                    st.experimental_rerun()
+
+                if c3.form_submit_button("Pull Card"):
+                    if len(st.session_state.chosen_virtual_cards) == num_cards:
+                        st.error("Already pulled requested number of cards")
+                    else:
+                        chosen = (
+                            st.session_state.chosen_virtual_cards
+                            + st.session_state.all_chosen_cards
+                        )
+                        card_puller = random.Random(shuffle_seed)
+                        while (choice := card_puller.choice(TAROT_DECK)) in chosen:
+                            pass
+                        st.session_state.chosen_virtual_cards.append(choice)
+                        st.experimental_rerun()
+                for x in range(num_cards):
+                    try:
+                        chosen = st.session_state.chosen_virtual_cards[x]
+                    except IndexError:
+                        chosen = ""
+                    cards.append(
+                        st.text_input(f"Card {x+1}", value=chosen, disabled=True)
+                    )
+
+            else:
+                if st.form_submit_button("Switch to drawing virtual cards"):
+                    st.session_state.chosen_virtual_cards = []
+                    st.session_state.card_draw_type = "Draw cards virtually"
+                    st.experimental_rerun()
+                st.write("Shuffle your deck and pull cards as instructed")
+                deck = [""] + TAROT_DECK
+                for x in range(num_cards):
+                    try:
+                        chosen = st.session_state.chosen_virtual_cards[x]
+                        select_index = deck.index(chosen)
+                    except IndexError:
+                        select_index = 0
+                    cards.append(
+                        st.selectbox(
+                            f"Card {x+1}",
+                            deck,
+                            index=select_index,
+                            disabled=virtual_cards,
+                        )
+                    )
+        if st.form_submit_button("Submit"):
+            can_submit = True
+            if len([x for x in answers if x]) != len(ai_commands.questions_to_ask):
+                can_submit = False
+            if len([x for x in cards if x]) != num_cards:
+                can_submit = False
+
+            if not can_submit:
+                st.error("Answer all questions and draw all cards before submitting")
+            elif len(cards) != len(set(cards)):
+                st.error("Cannot choose the same card more than once")
+                can_submit = False
+
+            if can_submit:
+                # combine the user answers into a single response, and check it for restricted content
+                if answers:
+                    combined_answer = "\n\n".join(answers)
+                    chat_session.user_says(combined_answer)
+                    _check_user_message(combined_answer)
+                if cards:
+                    chat_session.system_says(
+                        "The selected cards were: " + ", ".join(cards)
+                    )
+                    st.session_state.all_chosen_cards.extend(cards)
+                    st.session_state.chosen_virtual_cards = []
+                with st.spinner("Generating AI response"):
+                    response = _get_ai_response(chat_session)
+                st.write(response)
+                st.session_state.total_tokens_used += response["usage"]["total_tokens"]
+
+                chat_session.assistant_says(
+                    response["choices"][0]["message"]["content"]
+                )
+
+                save_session()
+                st.experimental_rerun()
+
+    if len(chat_session.get_history()) > 1:
         save_session()
 
-    st.caption(
-        "All art and text generated by Artificial Intelligence - for entertainment purposes only"
-    )
-    st.caption("View on [Github](https://github.com/msull/emilytarot)")
+
+class FlaggedInputError(RuntimeError):
+    pass
 
 
-def _extract_question(chat_response: str) -> Tuple[str, Optional[str]]:
-    """Extracts a question from the chat response. Returns the remaining chat response, and the question, if any."""
-    chat_response = chat_response.strip()
-    last_line = chat_response.splitlines()[-1]
-    if last_line.startswith("QUESTION: "):
-        question = last_line.removeprefix("QUESTION: ")
-        chat_response = chat_response.removesuffix(last_line).strip()
+def _check_user_message(msg: str):
+    response = openai.Moderation.create(msg)
+    if response.results[0].flagged:
+        raise FlaggedInputError()
+
+
+def _get_ai_response(chat_session: ChatSession):
+    chat_history = chat_session.get_history()[:]
+    # add the initial system message describing the AI's role
+    chat_history.insert(0, {"role": "system", "content": INITIAL_SYSTEM_MSG})
+
+    # now add a reinforcing message for the AI, based on wether we are interpreting cards right now or now
+    last_msg = chat_history[-1]
+    if last_msg["role"] == "system" and last_msg["content"].startswith(
+        "The selected cards were"
+    ):
+        chat_history.append(
+            {"role": "system", "content": CARDS_REINFORCEMENT_SYSTEM_MSG}
+        )
     else:
-        question = None
-    return chat_response, question
-
-
-def _ask_question(question, container, handler: Optional[Callable] = None):
-    # with container.form("question-form"):
-    container.divider()
-    answer = container.text_area(question)
-
-    if answer:
-        st.write(f'"{answer}"')
-    return container.button(
-        "Answer", on_click=handler, args=(answer,), disabled=not answer
-    )
-
-
-def _chat_qa():
-    chat_history = [
-        {"role": "system", "content": INITIAL_SYSTEM_MSG},
-        {"role": "assistant", "content": st.session_state.chosen_intro},
-        {"role": "user", "content": st.session_state.self_intro},
-    ]
-
-    for ai_msg, user_msg in st.session_state.reading_qa:
-        chat_history.append({"role": "assistant", "content": ai_msg})
-        chat_history.append({"role": "user", "content": user_msg})
-
-    chat_history.append({"role": "system", "content": REINFORCEMENT_SYSTEM_MSG})
+        chat_history.append({"role": "system", "content": REINFORCEMENT_SYSTEM_MSG})
 
     return openai.ChatCompletion.create(
         model="gpt-3.5-turbo",
@@ -417,39 +355,23 @@ def _chat_qa():
     )
 
 
-def _chat_interpret():
-    chat_history = [
-        {"role": "system", "content": INTERPRET_SYSTEM_MESSAGE},
-        {"role": "assistant", "content": st.session_state.chosen_intro},
-        {"role": "user", "content": st.session_state.self_intro},
-    ]
+try:
+    if "flagged_input" in st.session_state:
+        st.write("This session has been terminated")
+        # todo: display a positive affirming message and display good resources for mental health, suicide prevention, etc.
+    else:
+        main()
+except FlaggedInputError:
+    st.error("FLAGGED INPUT RECEIVED")
+    st.session_state.flagged_input = True
+    save_session()
+    st.experimental_rerun()
+    # end session, set flag to restart and display info panel with mental health / self harm links
 
-    for ai_msg, user_msg in st.session_state.reading_qa:
-        chat_history.append({"role": "assistant", "content": ai_msg})
-        chat_history.append({"role": "user", "content": user_msg})
+st.caption(
+    "All art and text generated by Artificial Intelligence - for entertainment purposes only"
+)
+st.caption("View on [Github](https://github.com/msull/emilytarot)")
 
-    chat_history.append({"role": "system", "content": REINFORCEMENT_SYSTEM_MSG})
-
-    # add the message asking user to draw cards
-    response = st.session_state.active_chat_response
-    full_chat_response: str = response["choices"][0]["message"]["content"].strip()
-
-    chat_history.append({"role": "assistant", "content": full_chat_response})
-
-    # add a system message indicating what cards were just drawn
-    chosen_were = ", ".join(st.session_state.just_now_chosen_cards)
-    msg = f"The chosen card(s) were: {chosen_were}"
-    chat_history.append({"role": "system", "content": msg})
-
-    return openai.ChatCompletion.create(
-        model="gpt-3.5-turbo",
-        messages=chat_history,
-    )
-
-
-def _date_id(now=None):
-    now = now or datetime.utcnow()
-    return now.strftime("%Y%m%d%H") + "".join(random.choices(ascii_lowercase, k=6))
-
-
-main()
+with st.expander("Session State", expanded=False):
+    st.write(st.session_state)

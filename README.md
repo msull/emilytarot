@@ -1,21 +1,43 @@
-# emilytarot
+# Emily Tarot
 
-AI-Based Tarot Readings via a Streamlit App-- an experiment in techno-mysticism.
+Emily Tarot is a techno-mystic project that leverages OpenAI's GPT-3.5-turbo for generating Tarot card readings. This
+project was designed as an experiment to learn Streamlit and to explore working with large language models for custom
+applications. Hosted at [EmilyTarot.com](http://emilytarot.com).
 
-This is currently pretty quickly hacked together as a learning experience for streamlit and working with LLM models.
+> Note: This project currently uses the GPT-3.5-turbo model due to access limitations. However, the results will be more
+> compelling once access to GPT-4 is granted.
 
-The code is rather ugly, and it's not too hard to break the app currently, but it's interesting to play with.
+## Features
 
-Currently hosted at [emilytarot.com](https://emilytarot.com), though I have a modest monthly budget set for the OpenAI
-API.
+* User Interface: The project uses Streamlit to create a visually engaging and intuitive interface for the users to
+  interact with.
+* Techno-Mystic Experience: Users are guided through a Tarot reading session where they can choose from a virtual deck
+  of Tarot cards or use their own physical deck.
+* AI Interaction: The selected cards and user's questions are processed by OpenAI's GPT-3.5-turbo model to generate a
+  personalized Tarot reading.
+* Session Persistence: The state of the current session is maintained across Streamlit reruns, providing a continuous
+  experience to the user.
+* Moderation: The user's input is checked and moderated for any inappropriate content, terminating the session and
+  displaying crisis resources when user content is flagged
+* Docker Support: A Dockerfile and docker-compose files are included to facilitate the deployment and running of the
+  application.
 
-I've applied for, and I am hoping to gain GPT-4 access soon. The results are much more compelling based on my minimal
-ChatGPT testing.
+## Usage
 
-https://www.youtube.com/watch?v=qbIk7-JPB2c
+To run Emily Tarot locally, follow these steps:
 
-This video is what got me interested in building something with a LLM and a random thought about an AGI psychic led to
-this particular app.
+1. Clone this repository.
+2. Install the dependencies: `pip install -r requirements.txt`
+3. Set up environment variables `SESSION_DIR` and `OPENAI_SECRET_KEY`.
+4. Use `cd src && streamlit src/streamlit_app.py` to start the Streamlit application.
+5. Navigate to `http://localhost:8501` in your web browser to interact with Emily Tarot.
 
-There are a few additional features I'd like to work out, and then perhaps I'll rewrite it as a serverless App with a
-proper frontend -- streamlit has been great for POC work, but so far I dislike hosting it.
+To build and run Emily Tarot with Docker:
+
+1. `docker-compose build`
+2. `docker-compose up`
+3. The application should be available at `http://localhost:9999`.
+
+## License
+
+This project is licensed under the terms of the MIT license.
