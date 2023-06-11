@@ -86,7 +86,8 @@ def init_state():
                 pass
             else:
                 for k, v in loaded_session_data.items():
-                    st.session_state[k] = v
+                    if not k.startswith("FormSubmitter"):
+                        st.session_state[k] = v
                 start_new_reading = False
 
         if start_new_reading:
