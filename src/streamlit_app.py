@@ -1,7 +1,7 @@
 import json
 import os
 import random
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 from typing import List
 from uuid import uuid4
@@ -38,10 +38,7 @@ def save_session():
 
 @dataclass
 class ChatSession:
-    initial_message: str
-
-    def __post_init__(self):
-        self.history = [{"role": "assistant", "content": self.initial_message}]
+    history: list = field(default_factory=list)
 
     def user_says(self, message):
         self.history.append({"role": "user", "content": message})
@@ -51,18 +48,6 @@ class ChatSession:
 
     def assistant_says(self, message):
         self.history.append({"role": "assistant", "content": message})
-
-    def get_history(self):
-        return self.history
-
-    def to_dict(self):
-        return {"initial_message": self.initial_message, "history": self.history}
-
-    @classmethod
-    def from_dict(cls, data):
-        cs = ChatSession(initial_message=data["initial_message"])
-        cs.history = data["history"]
-        return cs
 
 
 def init_state():
@@ -104,10 +89,12 @@ def init_state():
             st.session_state.emily_image = str(IMAGE_DIR / "emily.png")
             st.session_state.closing_image = imgs[3]
 
-            cs = ChatSession(initial_message=random.choice(INTROS))
-            st.session_state.chat_session = cs.to_dict()
+            cs = ChatSession()
+            cs.assistant_says(random.choice(INTROS))
+            st.session_state.chat_history = cs.history
             st.session_state.chosen_virtual_cards = []
             st.session_state.all_chosen_cards = []
+            st.session_state.bad_responses = []
             st.session_state.total_tokens_used = 0
 
 
@@ -174,9 +161,9 @@ def main():
     c1.image(st.session_state.emily_image)
     del c1
 
-    chat_session = ChatSession.from_dict(st.session_state.chat_session)
+    chat_session = ChatSession(history=st.session_state.chat_history)
 
-    for msg in chat_session.get_history():
+    for msg in chat_session.history:
         if msg["role"] == "assistant":
             st.write(_extract_commands(msg["content"]).cleaned_content)
         elif msg["role"] == "user":
@@ -191,7 +178,7 @@ def main():
                     unsafe_allow_html=True,
                 )
 
-    ai_commands = _extract_commands(chat_session.get_history()[-1]["content"])
+    ai_commands = _extract_commands(chat_session.history[-1]["content"])
 
     if not (ai_commands.draw_cards or ai_commands.questions_to_ask):
         # reading is over
@@ -307,8 +294,24 @@ def main():
                     st.session_state.all_chosen_cards.extend(cards)
                     st.session_state.chosen_virtual_cards = []
                 with st.spinner("Generating AI response"):
-                    response = _get_ai_response(chat_session)
-                st.write(response)
+                    got_valid_response = False
+                    attempts = 0
+                    max_attempts = 3
+                    while not got_valid_response:
+                        attempts += 1
+                        response = _get_ai_response(chat_session)
+                        try:
+                            _extract_commands(response['choices'][0]['message']['content'])
+                            break
+                        except Exception:
+                            print('Got bad response, trying again')
+                            st.session_state.bad_responses.append(response)
+                            st.session_state.total_tokens_used += response["usage"]["total_tokens"]
+                            if attempts >= max_attempts:
+                                print('Out of attempts')
+                                st.error('Encountered an error generating your reading, sorry about that')
+                                return
+
                 st.session_state.total_tokens_used += response["usage"]["total_tokens"]
 
                 chat_session.assistant_says(
@@ -318,7 +321,7 @@ def main():
                 save_session()
                 st.experimental_rerun()
 
-    if len(chat_session.get_history()) > 1:
+    if len(chat_session.history) > 1:
         save_session()
 
 
@@ -333,11 +336,11 @@ def _check_user_message(msg: str):
 
 
 def _get_ai_response(chat_session: ChatSession):
-    chat_history = chat_session.get_history()[:]
+    chat_history = chat_session.history[:]
     # add the initial system message describing the AI's role
     chat_history.insert(0, {"role": "system", "content": INITIAL_SYSTEM_MSG})
 
-    # now add a reinforcing message for the AI, based on wether we are interpreting cards right now or now
+    # now add a reinforcing message for the AI, based on whether we are interpreting cards right now or not
     last_msg = chat_history[-1]
     if last_msg["role"] == "system" and last_msg["content"].startswith(
         "The selected cards were"
