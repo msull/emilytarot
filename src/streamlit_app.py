@@ -186,6 +186,7 @@ def main():
         c1.image(st.session_state.closing_image)
         del c1
         if st.button("Start new session", use_container_width=True, type="primary"):
+            st.experimental_set_query_params(s="")
             st.session_state.clear()
             st.experimental_rerun()
         return
@@ -301,15 +302,21 @@ def main():
                         attempts += 1
                         response = _get_ai_response(chat_session)
                         try:
-                            _extract_commands(response['choices'][0]['message']['content'])
+                            _extract_commands(
+                                response["choices"][0]["message"]["content"]
+                            )
                             break
                         except Exception:
-                            print('Got bad response, trying again')
+                            print("Got bad response, trying again")
                             st.session_state.bad_responses.append(response)
-                            st.session_state.total_tokens_used += response["usage"]["total_tokens"]
+                            st.session_state.total_tokens_used += response["usage"][
+                                "total_tokens"
+                            ]
                             if attempts >= max_attempts:
-                                print('Out of attempts')
-                                st.error('Encountered an error generating your reading, sorry about that')
+                                print("Out of attempts")
+                                st.error(
+                                    "Encountered an error generating your reading, sorry about that"
+                                )
                                 return
 
                 st.session_state.total_tokens_used += response["usage"]["total_tokens"]
