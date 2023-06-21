@@ -11,6 +11,8 @@ COPY --chown=myuser:myuser requirements.txt /app
 
 # Install any needed packages specified in requirements.txt
 RUN pip3 install --no-cache-dir -r requirements.txt
+# update the title in the template so it is always correct, e.g. during link expansion/sharing
+RUN sed -i 's/<title>Streamlit<\/title>/<title>Emily Tarot - Virtual Tarot Readings<\/title>/g' /usr/local/lib/python3.10/site-packages/streamlit/static/index.html
 
 # Copy the current directory contents into the container at /app
 COPY --chown=myuser:myuser src/ /app
