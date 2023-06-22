@@ -184,8 +184,10 @@ def main():
         # reading is over
         _, c1, _ = st.columns(3)
         c1.image(st.session_state.closing_image)
+        link = f"[Link to this session](?s={st.session_state.session_id})"
+        c1.subheader(link)
         del c1
-        if st.button("Start new session", use_container_width=True, type="primary"):
+        if st.button("Return Home", use_container_width=True, type="primary"):
             st.experimental_set_query_params(s="")
             st.session_state.clear()
             st.experimental_rerun()
