@@ -4,8 +4,7 @@ Emily Tarot is a techno-mystic project that leverages OpenAI's GPT-3.5-turbo for
 project was designed as an experiment to learn Streamlit and to explore working with large language models for custom
 applications. Hosted at [EmilyTarot.com](http://emilytarot.com).
 
-> Note: This project currently uses the GPT-3.5-turbo model due to access limitations. However, the results will be more
-> compelling once access to GPT-4 is granted.
+> Note: This project is now using the incredible GPT-4-omni-mini model!
 
 ## Features
 

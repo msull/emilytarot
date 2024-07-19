@@ -361,7 +361,8 @@ def _get_ai_response(chat_session: ChatSession):
         chat_history.append({"role": "system", "content": REINFORCEMENT_SYSTEM_MSG})
 
     return openai.ChatCompletion.create(
-        model="gpt-3.5-turbo-0613",
+        # model="gpt-3.5-turbo-0613",
+        model="gpt-4o-mini",
         messages=chat_history,
     )
 
